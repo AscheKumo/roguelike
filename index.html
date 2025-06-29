@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Explorer - Roguelike Adventure</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+            color: #fff;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            display: flex;
+            gap: 30px;
+            padding: 20px;
+            max-width: 1400px;
+            width: 100%;
+            height: 100vh;
+            align-items: center;
+        }
+
+        #canvasWrapper {
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #gameCanvas {
+            border: 3px solid #2a2a4a;
+            background-color: #0a0a0a;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            display: block;
+        }
+
+        #sidebar {
+            width: 380px;
+            height: 90vh;
+            overflow-y: auto;
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.95) 0%, rgba(20, 20, 40, 0.95) 100%);
+            padding: 20px;
+            border: 2px solid #3a3a5a;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+        }
+
+        #sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #sidebar::-webkit-scrollbar-track {
+            background: #1a1a2a;
+            border-radius: 4px;
+        }
+
+        #sidebar::-webkit-scrollbar-thumb {
+            background: #4a4a6a;
+            border-radius: 4px;
+        }
+
+        #sidebar::-webkit-scrollbar-thumb:hover {
+            background: #5a5a7a;
+        }
+
+        .game-title {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #ffcc00;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            letter-spacing: 2px;
+        }
+
+        .panel {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(40, 40, 60, 0.6);
+            border-radius: 10px;
+            border: 1px solid #4a4a6a;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }
+
+        .panel:hover {
+            background: rgba(40, 40, 60, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel h3 {
+            margin-top: 0;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 14px;
+            color: #ff6b6b;
+            border-bottom: 2px solid #4a4a6a;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            transition: background 0.2s ease;
+        }
+
+        .stat-line:hover {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .stat-label {
+            color: #aaa;
+            font-weight: 400;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .hp-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+            position: relative;
+            border: 1px solid #333;
+        }
+
+        .hp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff3333 0%, #ff6666 100%);
+            transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hp-fill.healing {
+            background: linear-gradient(90deg, #4CAF50 0%, #66BB6A 100%);
+        }
+
+        .hp-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .hp-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        .equipment-slot {
+            background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
+            padding: 12px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #3a3a5a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .equipment-slot::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .equipment-slot:hover::before {
+            left: 100%;
+        }
+
+        .equipment-slot:hover {
+            background: linear-gradient(135deg, #3a3a5a 0%, #2a2a4a 100%);
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .equipment-slot.empty {
+            color: #666;
+            font-style: italic;
+        }
+
+        .equipment-slot.common { border-left: 3px solid #888; }
+        .equipment-slot.uncommon { border-left: 3px solid #4CAF50; }
+        .equipment-slot.rare { border-left: 3px solid #2196F3; }
+        .equipment-slot.epic { border-left: 3px solid #9C27B0; }
+        .equipment-slot.legendary { 
+            border-left: 3px solid #FF9800;
+            animation: legendary-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes legendary-glow {
+            0%, 100% { box-shadow: 0 0 5px #FF9800; }
+            50% { box-shadow: 0 0 20px #FF9800, 0 0 30px #FF9800; }
+        }
+
+        .inventory-item {
+            background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
+            padding: 10px 12px;
+            margin: 6px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            border: 1px solid #3a3a5a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .inventory-item:hover {
+            background: linear-gradient(135deg, #3a3a5a 0%, #2a2a4a 100%);
+            transform: translateX(5px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .inventory-item.common { border-left: 3px solid #888; }
+        .inventory-item.uncommon { border-left: 3px solid #4CAF50; }
+        .inventory-item.rare { border-left: 3px solid #2196F3; }
+        .inventory-item.epic { border-left: 3px solid #9C27B0; }
+        .inventory-item.legendary { 
+            border-left: 3px solid #FF9800;
+            animation: legendary-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes legendary-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        button {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            margin: 8px 4px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-family: 'Roboto', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #5CBF60 0%, #43A047 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(76, 175, 80, 0.3);
+        }
+
+        button:disabled {
+            background: linear-gradient(135deg, #666 0%, #444 100%);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        button:disabled:hover {
+            transform: none;
+        }
+
+        #shopPanel {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.98) 0%, rgba(20, 20, 40, 0.98) 100%);
+            border: 2px solid #4a4a6a;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            animation: modalFadeIn 0.3s ease;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        #shopPanel h2 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 20px;
+            color: #ffcc00;
+            text-align: center;
+            margin-bottom: 25px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        #shopPanel h3 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 14px;
+            color: #ff6b6b;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #4a4a6a;
+            padding-bottom: 10px;
+        }
+
+        .shop-item {
+            background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #3a3a5a;
+            transition: all 0.3s ease;
+        }
+
+        .shop-item:hover {
+            background: linear-gradient(135deg, #3a3a5a 0%, #2a2a4a 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .shop-item-info {
+            flex: 1;
+        }
+
+        .shop-item-name {
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .shop-item-stats {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .message {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
+            padding: 15px 30px;
+            border-radius: 50px;
+            display: none;
+            border: 2px solid #4a4a6a;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            font-weight: 700;
+            animation: messageFadeIn 0.3s ease;
+        }
+
+        @keyframes messageFadeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .controls {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .controls h4 {
+            margin-top: 0;
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .control-item {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-key {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #ffcc00;
+            border: 1px solid #4a4a6a;
+        }
+
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .legend h4 {
+            margin-top: 0;
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .legend-item {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-emoji {
+            font-size: 18px;
+            width: 30px;
+            text-align: center;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            backdrop-filter: blur(5px);
+        }
+
+        .inventory-counter {
+            color: #ffcc00;
+            font-weight: 700;
+        }
+
+        @media (max-width: 1200px) {
+            #gameContainer {
+                flex-direction: column;
+                height: auto;
+                padding: 10px;
+            }
+
+            #sidebar {
+                width: 100%;
+                max-width: 600px;
+                height: auto;
+                max-height: 50vh;
+            }
+
+            #gameCanvas {
+                width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="canvasWrapper">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+        </div>
+        
+        <div id="sidebar">
+            <h1 class="game-title">DUNGEON EXPLORER</h1>
+            
+            <div class="panel">
+                <h3>⚔️ Player Stats</h3>
+                <div class="hp-bar">
+                    <div class="hp-fill" id="hpBar" style="width: 100%"></div>
+                    <div class="hp-text" id="hpText">100/100 HP</div>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">💰 Gold:</span>
+                    <span class="stat-value" id="playerGold">50</span>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">📊 Dungeon Level:</span>
+                    <span class="stat-value" id="dungeonLevel">1</span>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">⚔️ Attack Power:</span>
+                    <span class="stat-value" id="playerAttack">10</span>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">🛡️ Defense:</span>
+                    <span class="stat-value" id="playerDefense">5</span>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>🎒 Equipment</h3>
+                <div id="equipmentSlots">
+                    <div class="equipment-slot empty" data-slot="weapon">⚔️ Weapon: Empty</div>
+                    <div class="equipment-slot empty" data-slot="armor">🛡️ Armor: Empty</div>
+                    <div class="equipment-slot empty" data-slot="accessory">💍 Accessory: Empty</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>📦 Inventory <span class="inventory-counter" id="inventoryCount">(0/20)</span></h3>
+                <div id="inventory"></div>
+            </div>
+
+            <div class="panel">
+                <button id="townButton" onclick="game.returnToTown()">🏘️ Return to Town</button>
+                <button id="dungeonButton" onclick="game.enterDungeon()" style="display:none;">⬇️ Enter Dungeon</button>
+            </div>
+
+            <div class="controls">
+                <h4>🎮 Controls</h4>
+                <div class="control-item">
+                    <span class="control-key">WASD</span> or <span class="control-key">↑↓←→</span> Movement
+                </div>
+                <div class="control-item">
+                    <span class="control-key">Walk into</span> Attack enemies
+                </div>
+                <div class="control-item">
+                    <span class="control-key">Walk over</span> Pick up loot
+                </div>
+                <div class="control-item">
+                    <span class="control-key">Click</span> Equip/Unequip items
+                </div>
+            </div>
+
+            <div class="legend">
+                <h4>📖 Legend</h4>
+                <div class="legend-item">
+                    <span class="legend-emoji">🧙</span> You (Player)
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">👹</span> Monsters
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">🪙</span> Merchant
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">📦</span> Loot
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">🪜</span> Stairs
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">🏠</span> Buildings (Town)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+
+    <div id="shopPanel">
+        <h2>🪙 Merchant's Shop</h2>
+        <div class="stat-line">
+            <span class="stat-label">Your Gold:</span>
+            <span class="stat-value" id="shopGold">0</span>
+        </div>
+        <h3>📥 Buy Items</h3>
+        <div id="shopBuyList"></div>
+        <h3>📤 Sell Items</h3>
+        <div id="shopSellList"></div>
+        <button onclick="game.closeShop()">✖️ Close Shop</button>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <script>
+        // Game constants
+        const TILE_SIZE = 20;
+        const MAP_WIDTH = 40;
+        const MAP_HEIGHT = 30;
+        const INVENTORY_MAX = 20;
+
+        // Tile types
+        const TILES = {
+            EMPTY: 0,
+            WALL: 1,
+            FLOOR: 2,
+            DOOR: 3,
+            STAIRS: 4,
+            PLAYER: 5,
+            ENEMY: 6,
+            LOOT: 7,
+            MERCHANT: 8,
+            BUILDING: 9,
+            TREE: 10,
+            GRASS: 11
+        };
+
+        // Enemy types with emojis
+        const ENEMY_TYPES = [
+            { name: 'Goblin', emoji: '👺' },
+            { name: 'Skeleton', emoji: '💀' },
+            { name: 'Zombie', emoji: '🧟' },
+            { name: 'Orc', emoji: '👹' },
+            { name: 'Spider', emoji: '🕷️' },
+            { name: 'Bat', emoji: '🦇' },
+            { name: 'Ghost', emoji: '👻' },
+            { name: 'Demon', emoji: '😈' },
+            { name: 'Dragon', emoji: '🐉' }
+        ];
+
+        // Item rarities
+        const RARITY = {
+            COMMON: { name: 'common', color: '#888', chance: 0.5 },
+            UNCOMMON: { name: 'uncommon', color: '#4CAF50', chance: 0.3 },
+            RARE: { name: 'rare', color: '#2196F3', chance: 0.15 },
+            EPIC: { name: 'epic', color: '#9C27B0', chance: 0.04 },
+            LEGENDARY: { name: 'legendary', color: '#FF9800', chance: 0.01 }
+        };
+
+        // Item templates
+        const ITEM_TEMPLATES = {
+            weapons: [
+                { name: 'Rusty Sword', type: 'weapon', attack: [3, 5] },
+                { name: 'Iron Blade', type: 'weapon', attack: [5, 8] },
+                { name: 'Steel Sword', type: 'weapon', attack: [8, 12] },
+                { name: 'Enchanted Blade', type: 'weapon', attack: [12, 18] },
+                { name: 'Dragon Slayer', type: 'weapon', attack: [20, 30] }
+            ],
+            armors: [
+                { name: 'Cloth Armor', type: 'armor', defense: [2, 4] },
+                { name: 'Leather Vest', type: 'armor', defense: [4, 6] },
+                { name: 'Chainmail', type: 'armor', defense: [6, 10] },
+                { name: 'Plate Armor', type: 'armor', defense: [10, 15] },
+                { name: 'Dragon Scale', type: 'armor', defense: [15, 25] }
+            ],
+            accessories: [
+                { name: 'Lucky Charm', type: 'accessory', attack: [1, 2], defense: [1, 2] },
+                { name: 'Power Ring', type: 'accessory', attack: [2, 4], defense: [0, 0] },
+                { name: 'Shield Ring', type: 'accessory', attack: [0, 0], defense: [2, 4] },
+                { name: 'Warrior Band', type: 'accessory', attack: [3, 5], defense: [3, 5] },
+                { name: 'Crown of Kings', type: 'accessory', attack: [5, 8], defense: [5, 8] }
+            ]
+        };
+
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.inTown = true;
+                this.dungeonLevel = 1;
+                this.map = [];
+                this.entities = [];
+                this.items = [];
+                
+                this.player = {
+                    x: 20,
+                    y: 15,
+                    hp: 100,
+                    maxHp: 100,
+                    baseAttack: 10,
+                    baseDefense: 5,
+                    gold: 50,
+                    inventory: [],
+                    equipment: {
+                        weapon: null,
+                        armor: null,
+                        accessory: null
+                    }
+                };
+
+                this.shopOpen = false;
+                this.shopInventory = [];
+                
+                this.initializeGame();
+                this.setupEventListeners();
+            }
+
+            initializeGame() {
+                if (this.inTown) {
+                    this.generateTown();
+                } else {
+                    this.generateDungeon();
+                }
+                this.updateUI();
+                this.gameLoop();
+            }
+
+            setupEventListeners() {
+                document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+                
+                // Equipment slot clicks
+                document.querySelectorAll('.equipment-slot').forEach(slot => {
+                    slot.addEventListener('click', (e) => {
+                        const slotType = e.target.dataset.slot;
+                        this.unequipItem(slotType);
+                    });
+                });
+            }
+
+            handleKeyPress(e) {
+                if (this.shopOpen) return;
+                
+                let dx = 0, dy = 0;
+                
+                switch(e.key.toLowerCase()) {
+                    case 'w':
+                    case 'arrowup':
+                        dy = -1;
+                        break;
+                    case 's':
+                    case 'arrowdown':
+                        dy = 1;
+                        break;
+                    case 'a':
+                    case 'arrowleft':
+                        dx = -1;
+                        break;
+                    case 'd':
+                    case 'arrowright':
+                        dx = 1;
+                        break;
+                }
+                
+                if (dx !== 0 || dy !== 0) {
+                    this.movePlayer(dx, dy);
+                }
+            }
+
+            movePlayer(dx, dy) {
+                const newX = this.player.x + dx;
+                const newY = this.player.y + dy;
+                
+                if (newX < 0 || newX >= MAP_WIDTH || newY < 0 || newY >= MAP_HEIGHT) return;
+                
+                const tile = this.map[newY][newX];
+                
+                if (tile === TILES.WALL || tile === TILES.BUILDING || tile === TILES.TREE) return;
+                
+                // Check for enemy collision
+                const enemy = this.entities.find(e => e.x === newX && e.y === newY && e.type === 'enemy');
+                if (enemy) {
+                    this.combat(enemy);
+                    return;
+                }
+                
+                // Check for merchant
+                if (tile === TILES.MERCHANT) {
+                    this.openShop();
+                    return;
+                }
+                
+                // Check for stairs
+                if (tile === TILES.STAIRS && !this.inTown) {
+                    this.dungeonLevel++;
+                    this.generateDungeon();
+                    this.showMessage(`🪜 Descended to level ${this.dungeonLevel}`);
+                    return;
+                }
+                
+                // Check for loot
+                const itemIndex = this.items.findIndex(item => item.x === newX && item.y === newY);
+                if (itemIndex !== -1) {
+                    const item = this.items[itemIndex];
+                    if (this.player.inventory.length < INVENTORY_MAX) {
+                        this.player.inventory.push(item);
+                        this.items.splice(itemIndex, 1);
+                        this.showMessage(`📦 Picked up ${item.name}`);
+                        this.updateUI();
+                    } else {
+                        this.showMessage('❌ Inventory full!');
+                    }
+                }
+                
+                this.player.x = newX;
+                this.player.y = newY;
+            }
+
+            combat(enemy) {
+                const playerAttack = this.getPlayerAttack();
+                const playerDefense = this.getPlayerDefense();
+                
+                const damage = Math.max(1, playerAttack - enemy.defense);
+                enemy.hp -= damage;
+                
+                if (enemy.hp <= 0) {
+                    // Enemy defeated
+                    const goldReward = Math.floor(Math.random() * 20) + 10 + (this.dungeonLevel * 5);
+                    this.player.gold += goldReward;
+                    
+                    // Remove enemy
+                    const index = this.entities.indexOf(enemy);
+                    this.entities.splice(index, 1);
+                    
+                    // Chance to drop loot
+                    if (Math.random() < 0.3) {
+                        this.spawnLoot(enemy.x, enemy.y);
+                    }
+                    
+                    this.showMessage(`⚔️ Defeated ${enemy.name}! +${goldReward} gold`);
+                } else {
+                    // Enemy counter attack
+                    const enemyDamage = Math.max(1, enemy.attack - playerDefense);
+                    this.player.hp -= enemyDamage;
+                    
+                    if (this.player.hp <= 0) {
+                        this.gameOver();
+                    }
+                }
+                
+                this.updateUI();
+            }
+
+            getPlayerAttack() {
+                let total = this.player.baseAttack;
+                if (this.player.equipment.weapon) {
+                    total += this.player.equipment.weapon.attack;
+                }
+                if (this.player.equipment.accessory) {
+                    total += this.player.equipment.accessory.attack || 0;
+                }
+                return total;
+            }
+
+            getPlayerDefense() {
+                let total = this.player.baseDefense;
+                if (this.player.equipment.armor) {
+                    total += this.player.equipment.armor.defense;
+                }
+                if (this.player.equipment.accessory) {
+                    total += this.player.equipment.accessory.defense || 0;
+                }
+                return total;
+            }
+
+            generateTown() {
+                // Initialize map with grass
+                this.map = Array(MAP_HEIGHT).fill().map(() => Array(MAP_WIDTH).fill(TILES.GRASS));
+                this.entities = [];
+                this.items = [];
+                
+                // Create town square (stone floor)
+                for (let y = 8; y < 22; y++) {
+                    for (let x = 12; x < 28; x++) {
+                        this.map[y][x] = TILES.FLOOR;
+                    }
+                }
+                
+                // Add some buildings
+                for (let i = 0; i < 4; i++) {
+                    const bx = 13 + (i % 2) * 7;
+                    const by = 9 + Math.floor(i / 2) * 6;
+                    for (let y = 0; y < 3; y++) {
+                        for (let x = 0; x < 4; x++) {
+                            this.map[by + y][bx + x] = TILES.BUILDING;
+                        }
+                    }
+                }
+                
+                // Add some trees around town
+                for (let i = 0; i < 20; i++) {
+                    const tx = Math.floor(Math.random() * MAP_WIDTH);
+                    const ty = Math.floor(Math.random() * MAP_HEIGHT);
+                    if (this.map[ty][tx] === TILES.GRASS) {
+                        this.map[ty][tx] = TILES.TREE;
+                    }
+                }
+                
+                // Place merchant
+                this.map[15][20] = TILES.MERCHANT;
+                
+                // Place dungeon entrance
+                this.map[19][20] = TILES.STAIRS;
+                
+                // Place player
+                this.player.x = 20;
+                this.player.y = 15;
+            }
+
+            generateDungeon() {
+                // Initialize map with walls
+                this.map = Array(MAP_HEIGHT).fill().map(() => Array(MAP_WIDTH).fill(TILES.WALL));
+                this.entities = [];
+                this.items = [];
+                
+                // Generate rooms
+                const rooms = [];
+                const numRooms = 5 + Math.floor(Math.random() * 5);
+                
+                for (let i = 0; i < numRooms; i++) {
+                    const room = this.generateRoom();
+                    if (room) rooms.push(room);
+                }
+                
+                // Connect rooms with corridors
+                for (let i = 0; i < rooms.length - 1; i++) {
+                    this.connectRooms(rooms[i], rooms[i + 1]);
+                }
+                
+                // Place player in first room
+                const firstRoom = rooms[0];
+                this.player.x = Math.floor(firstRoom.x + firstRoom.width / 2);
+                this.player.y = Math.floor(firstRoom.y + firstRoom.height / 2);
+                
+                // Place stairs in last room
+                const lastRoom = rooms[rooms.length - 1];
+                const stairsX = Math.floor(lastRoom.x + lastRoom.width / 2);
+                const stairsY = Math.floor(lastRoom.y + lastRoom.height / 2);
+                this.map[stairsY][stairsX] = TILES.STAIRS;
+                
+                // Spawn enemies and loot
+                rooms.forEach((room, index) => {
+                    if (index > 0) { // Skip first room (player spawn)
+                        // Spawn enemies
+                        const numEnemies = 1 + Math.floor(Math.random() * 3);
+                        for (let i = 0; i < numEnemies; i++) {
+                            const x = room.x + 1 + Math.floor(Math.random() * (room.width - 2));
+                            const y = room.y + 1 + Math.floor(Math.random() * (room.height - 2));
+                            this.spawnEnemy(x, y);
+                        }
+                        
+                        // Spawn loot
+                        if (Math.random() < 0.5) {
+                            const x = room.x + 1 + Math.floor(Math.random() * (room.width - 2));
+                            const y = room.y + 1 + Math.floor(Math.random() * (room.height - 2));
+                            this.spawnLoot(x, y);
+                        }
+                    }
+                });
+            }
+
+            generateRoom() {
+                const maxAttempts = 50;
+                
+                for (let i = 0; i < maxAttempts; i++) {
+                    const width = 4 + Math.floor(Math.random() * 6);
+                    const height = 4 + Math.floor(Math.random() * 6);
+                    const x = 1 + Math.floor(Math.random() * (MAP_WIDTH - width - 2));
+                    const y = 1 + Math.floor(Math.random() * (MAP_HEIGHT - height - 2));
+                    
+                    // Check if room overlaps
+                    let overlaps = false;
+                    for (let dy = -1; dy < height + 1; dy++) {
+                        for (let dx = -1; dx < width + 1; dx++) {
+                            if (this.map[y + dy][x + dx] === TILES.FLOOR) {
+                                overlaps = true;
+                                break;
+                            }
+                        }
+                        if (overlaps) break;
+                    }
+                    
+                    if (!overlaps) {
+                        // Carve out room
+                        for (let dy = 0; dy < height; dy++) {
+                            for (let dx = 0; dx < width; dx++) {
+                                this.map[y + dy][x + dx] = TILES.FLOOR;
+                            }
+                        }
+                        
+                        return { x, y, width, height };
+                    }
+                }
+                
+                return null;
+            }
+
+            connectRooms(room1, room2) {
+                const x1 = Math.floor(room1.x + room1.width / 2);
+                const y1 = Math.floor(room1.y + room1.height / 2);
+                const x2 = Math.floor(room2.x + room2.width / 2);
+                const y2 = Math.floor(room2.y + room2.height / 2);
+                
+                let x = x1;
+                let y = y1;
+                
+                // Create L-shaped corridor
+                while (x !== x2) {
+                    this.map[y][x] = TILES.FLOOR;
+                    x += x < x2 ? 1 : -1;
+                }
+                
+                while (y !== y2) {
+                    this.map[y][x] = TILES.FLOOR;
+                    y += y < y2 ? 1 : -1;
+                }
+            }
+
+            spawnEnemy(x, y) {
+                const enemyType = this.generateEnemyType();
+                const enemy = {
+                    type: 'enemy',
+                    x: x,
+                    y: y,
+                    name: enemyType.name,
+                    emoji: enemyType.emoji,
+                    hp: 20 + (this.dungeonLevel * 10),
+                    attack: 5 + (this.dungeonLevel * 3),
+                    defense: 2 + this.dungeonLevel
+                };
+                this.entities.push(enemy);
+            }
+
+            generateEnemyType() {
+                // Higher level dungeons have chance for stronger enemies
+                const maxIndex = Math.min(ENEMY_TYPES.length, 3 + this.dungeonLevel);
+                return ENEMY_TYPES[Math.floor(Math.random() * maxIndex)];
+            }
+
+            spawnLoot(x, y) {
+                const rarity = this.determineRarity();
+                const item = this.generateItem(rarity);
+                item.x = x;
+                item.y = y;
+                this.items.push(item);
+            }
+
+            determineRarity() {
+                const roll = Math.random();
+                let cumulative = 0;
+                
+                for (const [key, rarity] of Object.entries(RARITY)) {
+                    cumulative += rarity.chance;
+                    if (roll <= cumulative) {
+                        return rarity;
+                    }
+                }
+                
+                return RARITY.COMMON;
+            }
+
+            generateItem(rarity) {
+                const allItems = [
+                    ...ITEM_TEMPLATES.weapons,
+                    ...ITEM_TEMPLATES.armors,
+                    ...ITEM_TEMPLATES.accessories
+                ];
+                
+                const template = allItems[Math.floor(Math.random() * allItems.length)];
+                const rarityMultiplier = Object.keys(RARITY).indexOf(Object.keys(RARITY).find(k => RARITY[k] === rarity)) + 1;
+                
+                const item = {
+                    id: Date.now() + Math.random(),
+                    name: `${rarity.name.charAt(0).toUpperCase() + rarity.name.slice(1)} ${template.name}`,
+                    type: template.type,
+                    rarity: rarity.name,
+                    value: 10 * rarityMultiplier * (this.dungeonLevel + 1)
+                };
+                
+                if (template.attack) {
+                    const [min, max] = template.attack;
+                    item.attack = Math.floor((min + Math.random() * (max - min)) * rarityMultiplier);
+                }
+                
+                if (template.defense) {
+                    const [min, max] = template.defense;
+                    item.defense = Math.floor((min + Math.random() * (max - min)) * rarityMultiplier);
+                }
+                
+                return item;
+            }
+
+            equipItem(item) {
+                const slot = item.type;
+                
+                // Unequip current item if any
+                if (this.player.equipment[slot]) {
+                    this.player.inventory.push(this.player.equipment[slot]);
+                }
+                
+                // Equip new item
+                this.player.equipment[slot] = item;
+                
+                // Remove from inventory
+                const index = this.player.inventory.indexOf(item);
+                this.player.inventory.splice(index, 1);
+                
+                this.updateUI();
+                this.showMessage(`✅ Equipped ${item.name}`);
+            }
+
+            unequipItem(slot) {
+                const item = this.player.equipment[slot];
+                if (!item) return;
+                
+                if (this.player.inventory.length >= INVENTORY_MAX) {
+                    this.showMessage('❌ Inventory full!');
+                    return;
+                }
+                
+                this.player.inventory.push(item);
+                this.player.equipment[slot] = null;
+                this.updateUI();
+                this.showMessage(`📦 Unequipped ${item.name}`);
+            }
+
+            openShop() {
+                this.shopOpen = true;
+                document.getElementById('shopPanel').style.display = 'block';
+                document.getElementById('overlay').style.display = 'block';
+                this.generateShopInventory();
+                this.updateShopUI();
+            }
+
+            closeShop() {
+                this.shopOpen = false;
+                document.getElementById('shopPanel').style.display = 'none';
+                document.getElementById('overlay').style.display = 'none';
+            }
+
+            generateShopInventory() {
+                this.shopInventory = [];
+                
+                // Generate random shop items
+                for (let i = 0; i < 8; i++) {
+                    const rarity = Math.random() < 0.7 ? RARITY.COMMON : 
+                                  Math.random() < 0.9 ? RARITY.UNCOMMON : RARITY.RARE;
+                    const item = this.generateItem(rarity);
+                    item.price = item.value * 2; // Shop markup
+                    this.shopInventory.push(item);
+                }
+            }
+
+            buyItem(item) {
+                if (this.player.gold < item.price) {
+                    this.showMessage('❌ Not enough gold!');
+                    return;
+                }
+                
+                if (this.player.inventory.length >= INVENTORY_MAX) {
+                    this.showMessage('❌ Inventory full!');
+                    return;
+                }
+                
+                this.player.gold -= item.price;
+                this.player.inventory.push(item);
+                
+                // Remove from shop
+                const index = this.shopInventory.indexOf(item);
+                this.shopInventory.splice(index, 1);
+                
+                this.updateUI();
+                this.updateShopUI();
+                this.showMessage(`✅ Bought ${item.name}`);
+            }
+
+            sellItem(item) {
+                this.player.gold += item.value;
+                
+                // Remove from inventory
+                const index = this.player.inventory.indexOf(item);
+                this.player.inventory.splice(index, 1);
+                
+                this.updateUI();
+                this.updateShopUI();
+                this.showMessage(`💰 Sold ${item.name} for ${item.value} gold`);
+            }
+
+            updateShopUI() {
+                document.getElementById('shopGold').textContent = this.player.gold;
+                
+                // Update buy list
+                const buyList = document.getElementById('shopBuyList');
+                buyList.innerHTML = '';
+                this.shopInventory.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'shop-item';
+                    div.innerHTML = `
+                        <div class="shop-item-info">
+                            <div class="shop-item-name ${item.rarity}">${item.name}</div>
+                            <div class="shop-item-stats">${this.getItemStats(item)}</div>
+                        </div>
+                        <button onclick="game.buyItem(game.shopInventory.find(i => i.id === ${item.id}))" 
+                                ${this.player.gold < item.price ? 'disabled' : ''}>
+                            Buy (${item.price}g)
+                        </button>
+                    `;
+                    buyList.appendChild(div);
+                });
+                
+                // Update sell list
+                const sellList = document.getElementById('shopSellList');
+                sellList.innerHTML = '';
+                this.player.inventory.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'shop-item';
+                    div.innerHTML = `
+                        <div class="shop-item-info">
+                            <div class="shop-item-name ${item.rarity}">${item.name}</div>
+                            <div class="shop-item-stats">${this.getItemStats(item)}</div>
+                        </div>
+                        <button onclick="game.sellItem(game.player.inventory.find(i => i.id === ${item.id}))">
+                            Sell (${item.value}g)
+                        </button>
+                    `;
+                    sellList.appendChild(div);
+                });
+            }
+
+            getItemStats(item) {
+                const stats = [];
+                if (item.attack) stats.push(`⚔️ ${item.attack}`);
+                if (item.defense) stats.push(`🛡️ ${item.defense}`);
+                return stats.join(' ');
+            }
+
+            returnToTown() {
+                this.inTown = true;
+                this.generateTown();
+                
+                // Heal player to full health
+                const healAmount = this.player.maxHp - this.player.hp;
+                this.player.hp = this.player.maxHp;
+                
+                // Add healing effect to HP bar
+                const hpBar = document.getElementById('hpBar');
+                hpBar.classList.add('healing');
+                setTimeout(() => {
+                    hpBar.classList.remove('healing');
+                }, 1000);
+                
+                document.getElementById('townButton').style.display = 'none';
+                document.getElementById('dungeonButton').style.display = 'block';
+                
+                if (healAmount > 0) {
+                    this.showMessage(`🏘️ Returned to town - Healed ${healAmount} HP! ❤️`);
+                } else {
+                    this.showMessage('🏘️ Returned to town');
+                }
+                
+                this.updateUI();
+            }
+
+            enterDungeon() {
+                this.inTown = false;
+                this.dungeonLevel = 1;
+                this.generateDungeon();
+                document.getElementById('townButton').style.display = 'block';
+                document.getElementById('dungeonButton').style.display = 'none';
+                this.showMessage('⬇️ Entered the dungeon');
+            }
+
+            gameOver() {
+                alert(`💀 Game Over! You reached dungeon level ${this.dungeonLevel} and collected ${this.player.gold} gold.`);
+                location.reload();
+            }
+
+            showMessage(text) {
+                const messageEl = document.getElementById('message');
+                messageEl.textContent = text;
+                messageEl.style.display = 'block';
+                setTimeout(() => {
+                    messageEl.style.display = 'none';
+                }, 3000);
+            }
+
+            updateUI() {
+                // Update HP bar
+                const hpPercent = (this.player.hp / this.player.maxHp) * 100;
+                document.getElementById('hpBar').style.width = `${hpPercent}%`;
+                document.getElementById('hpText').textContent = `${this.player.hp}/${this.player.maxHp} HP`;
+                
+                // Update stats
+                document.getElementById('playerGold').textContent = this.player.gold;
+                document.getElementById('dungeonLevel').textContent = this.dungeonLevel;
+                document.getElementById('playerAttack').textContent = this.getPlayerAttack();
+                document.getElementById('playerDefense').textContent = this.getPlayerDefense();
+                
+                // Update equipment
+                const slots = document.querySelectorAll('.equipment-slot');
+                slots.forEach(slot => {
+                    const type = slot.dataset.slot;
+                    const item = this.player.equipment[type];
+                    const emoji = type === 'weapon' ? '⚔️' : type === 'armor' ? '🛡️' : '💍';
+                    if (item) {
+                        slot.textContent = `${emoji} ${item.name}`;
+                        slot.className = `equipment-slot ${item.rarity}`;
+                    } else {
+                        slot.textContent = `${emoji} ${type.charAt(0).toUpperCase() + type.slice(1)}: Empty`;
+                        slot.className = 'equipment-slot empty';
+                    }
+                });
+                
+                // Update inventory
+                const inventoryEl = document.getElementById('inventory');
+                inventoryEl.innerHTML = '';
+                document.getElementById('inventoryCount').textContent = `(${this.player.inventory.length}/${INVENTORY_MAX})`;
+                
+                this.player.inventory.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = `inventory-item ${item.rarity}`;
+                    div.textContent = `${item.name} ${this.getItemStats(item)}`;
+                    div.onclick = () => this.equipItem(item);
+                    inventoryEl.appendChild(div);
+                });
+            }
+
+            render() {
+                // Create gradient background
+                const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+                gradient.addColorStop(0, '#0a0a0a');
+                gradient.addColorStop(1, '#1a1a1a');
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Enable smooth rendering for emojis
+                this.ctx.font = '16px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                
+                // Render map with subtle shadows
+                for (let y = 0; y < MAP_HEIGHT; y++) {
+                    for (let x = 0; x < MAP_WIDTH; x++) {
+                        const tile = this.map[y][x];
+                        let color = '#000';
+                        let emoji = null;
+                        
+                        switch(tile) {
+                            case TILES.WALL:
+                                color = this.inTown ? '#654321' : '#2a2a3a';
+                                break;
+                            case TILES.FLOOR:
+                                color = this.inTown ? '#8a8a8a' : '#1a1a2a';
+                                break;
+                            case TILES.GRASS:
+                                color = '#1a4a1a';
+                                break;
+                            case TILES.STAIRS:
+                                color = this.inTown ? '#4a4a4a' : '#3a2a1a';
+                                emoji = '🪜';
+                                break;
+                            case TILES.MERCHANT:
+                                color = '#8a8a8a';
+                                emoji = '🪙';
+                                break;
+                            case TILES.BUILDING:
+                                emoji = '🏠';
+                                color = '#4a3a2a';
+                                break;
+                            case TILES.TREE:
+                                emoji = '🌲';
+                                color = '#1a4a1a';
+                                break;
+                        }
+                        
+                        // Draw background with subtle border
+                        this.ctx.fillStyle = color;
+                        this.ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        
+                        // Add subtle grid lines
+                        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                        this.ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        
+                        // Draw emoji if applicable
+                        if (emoji) {
+                            // Add shadow for emojis
+                            this.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                            this.ctx.shadowBlur = 3;
+                            this.ctx.shadowOffsetX = 1;
+                            this.ctx.shadowOffsetY = 1;
+                            this.ctx.fillText(emoji, x * TILE_SIZE + TILE_SIZE/2, y * TILE_SIZE + TILE_SIZE/2);
+                            this.ctx.shadowBlur = 0;
+                        }
+                    }
+                }
+                
+                // Render items with glow effect
+                this.items.forEach(item => {
+                    // Add glow based on rarity
+                    this.ctx.shadowColor = RARITY[item.rarity.toUpperCase()].color;
+                    this.ctx.shadowBlur = 8;
+                    this.ctx.fillText('📦', item.x * TILE_SIZE + TILE_SIZE/2, item.y * TILE_SIZE + TILE_SIZE/2);
+                    this.ctx.shadowBlur = 0;
+                });
+                
+                // Render entities
+                this.entities.forEach(entity => {
+                    if (entity.type === 'enemy') {
+                        this.ctx.shadowColor = 'rgba(255, 0, 0, 0.5)';
+                        this.ctx.shadowBlur = 5;
+                        this.ctx.fillText(entity.emoji, entity.x * TILE_SIZE + TILE_SIZE/2, entity.y * TILE_SIZE + TILE_SIZE/2);
+                        this.ctx.shadowBlur = 0;
+                    }
+                });
+                
+                // Render player with glow
+                this.ctx.shadowColor = 'rgba(100, 100, 255, 0.8)';
+                this.ctx.shadowBlur = 10;
+                this.ctx.fillText('🧙', this.player.x * TILE_SIZE + TILE_SIZE/2, this.player.y * TILE_SIZE + TILE_SIZE/2);
+                this.ctx.shadowBlur = 0;
+            }
+
+            gameLoop() {
+                this.render();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+
+        // Start the game
+        const game = new Game();
+    </script>
+</body>
+</html>
