@@ -22,14 +22,20 @@
         <div id="main-content">
             <div id="game-view">
                 <div id="dungeon-view" class="view active">
-                    <div id="dungeon-info">
-                        <h2>🏰 Dungeon - Floor <span id="current-floor">1</span></h2>
-                    </div>
-                    <div id="dungeon-map"></div>
-                    <div id="action-buttons">
-                        <button onclick="game.returnToTown()">🏘️ Return to Town</button>
-                        <button onclick="game.showInventory()">🎒 Inventory</button>
-                        <button onclick="game.usePotion()">🧪 Potion (<span id="potion-count">3</span>)</button>
+                    <div id="dungeon-layout">
+                        <div id="dungeon-map"></div>
+                        <div id="dungeon-sidebar">
+                            <div id="dungeon-info">
+                                <h2>🏰 Dungeon</h2>
+                                <h3>Floor <span id="current-floor">1</span></h3>
+                                <p class="enemy-count">⚔️ Enemies: <span id="enemy-count">0</span></p>
+                            </div>
+                            <div id="action-buttons">
+                                <button onclick="game.returnToTown()">🏘️ Return to Town</button>
+                                <button onclick="game.showInventory()">🎒 Inventory</button>
+                                <button onclick="game.usePotion()">🧪 Potion (<span id="potion-count">3</span>)</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
