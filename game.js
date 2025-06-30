@@ -18,7 +18,8 @@ class Game {
                 accessory: null
             },
             potions: 3,
-            storage: []
+            storage: [],
+            defeatedBosses: [] // Track which boss floors have been cleared
         };
 
         this.dungeon = {
@@ -27,7 +28,8 @@ class Game {
             monsters: [],
             items: [],
             stairs: null,
-            discovered: []
+            discovered: [],
+            allEnemiesDefeated: false
         };
 
         this.monsterTypes = [
@@ -88,16 +90,111 @@ class Game {
         this.currentEnemy = null;
         this.currentView = 'town';
         this.monsterMoveInterval = null;
+        this.autoSaveInterval = null;
+        this.selectedFloor = null;
 
+        // Load saved game if exists
+        this.loadGame();
+        
         this.init();
         this.setupKeyboardControls();
+        this.setupAutoSave();
     }
 
     init() {
-        this.showTown();
+        if (this.currentView === 'dungeon' && this.dungeon.map.length > 0) {
+            // If we loaded in the dungeon, render it
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('dungeon-view').classList.add('active');
+            this.renderDungeon();
+            this.startMonsterMovement();
+        } else {
+            // Otherwise show town
+            this.showTown();
+        }
+        
         this.updateStats();
-        this.addMessage("🏘️ Welcome to the town! Prepare for your dungeon adventure!");
-        this.addMessage("💡 Tip: Use WASD or click to move in the dungeon!");
+        
+        if (this.savedGameLoaded) {
+            this.addMessage("🔄 Welcome back! Your progress has been restored.");
+        } else {
+            this.addMessage("🏘️ Welcome to the town! Prepare for your dungeon adventure!");
+            this.addMessage("💡 Tip: Use WASD or click to move in the dungeon!");
+        }
+    }
+
+    setupAutoSave() {
+        // Auto-save every 30 seconds
+        this.autoSaveInterval = setInterval(() => {
+            this.saveGame();
+        }, 30000);
+
+        // Save when tab is about to close
+        window.addEventListener('beforeunload', () => {
+            this.saveGame();
+        });
+    }
+
+    saveGame() {
+        const saveData = {
+            player: this.player,
+            dungeon: {
+                floor: this.dungeon.floor,
+                map: this.dungeon.map,
+                monsters: this.dungeon.monsters,
+                items: this.dungeon.items,
+                stairs: this.dungeon.stairs,
+                discovered: this.dungeon.discovered,
+                allEnemiesDefeated: this.dungeon.allEnemiesDefeated
+            },
+            currentView: this.currentView,
+            timestamp: new Date().toISOString()
+        };
+
+        try {
+            localStorage.setItem('emojiDungeonSave', JSON.stringify(saveData));
+            // Don't show message for auto-saves, only manual ones if we add that feature
+        } catch (e) {
+            console.error('Failed to save game:', e);
+        }
+    }
+
+    loadGame() {
+        try {
+            const savedData = localStorage.getItem('emojiDungeonSave');
+            if (savedData) {
+                const saveData = JSON.parse(savedData);
+                
+                // Restore player data
+                this.player = saveData.player;
+                
+                // Ensure defeatedBosses exists for older saves
+                if (!this.player.defeatedBosses) {
+                    this.player.defeatedBosses = [];
+                }
+                
+                // Restore dungeon data
+                this.dungeon = saveData.dungeon;
+                
+                // Restore current view
+                this.currentView = saveData.currentView || 'town';
+                
+                this.savedGameLoaded = true;
+                
+                // Recalculate stats to ensure equipment bonuses are applied
+                this.recalculateStats();
+            }
+        } catch (e) {
+            console.error('Failed to load saved game:', e);
+            this.savedGameLoaded = false;
+        }
+    }
+
+    deleteSave() {
+        if (confirm('Are you sure you want to delete your saved game? This cannot be undone!')) {
+            localStorage.removeItem('emojiDungeonSave');
+            location.reload();
+        }
     }
 
     setupKeyboardControls() {
@@ -142,6 +239,7 @@ class Game {
         this.dungeon.monsters = [];
         this.dungeon.items = [];
         this.dungeon.discovered = [];
+        this.dungeon.allEnemiesDefeated = false;
 
         // Initialize map
         for (let y = 0; y < size; y++) {
@@ -193,6 +291,9 @@ class Game {
 
         // Start monster movement
         this.startMonsterMovement();
+
+        // Save after generating new floor
+        this.saveGame();
     }
 
     createPaths() {
@@ -359,6 +460,14 @@ class Game {
         this.renderDungeon();
     }
 
+    checkAllEnemiesDefeated() {
+        if (this.dungeon.monsters.length === 0) {
+            this.dungeon.allEnemiesDefeated = true;
+            this.addMessage("✅ All enemies on this floor have been defeated! You can now proceed to the next floor.");
+            this.saveGame();
+        }
+    }
+
     renderDungeon() {
         const mapDiv = document.getElementById('dungeon-map');
         mapDiv.innerHTML = '';
@@ -390,7 +499,13 @@ class Game {
                     } else if (item && distance <= 3) {
                         tile.textContent = '📦';
                     } else if (this.dungeon.stairs && x === this.dungeon.stairs.x && y === this.dungeon.stairs.y) {
-                        tile.textContent = '🪜';
+                        if (this.dungeon.allEnemiesDefeated) {
+                            tile.textContent = '🪜';
+                            tile.style.filter = 'none';
+                        } else {
+                            tile.textContent = '🔒';
+                            tile.style.filter = 'grayscale(1)';
+                        }
                     }
                     
                     tile.classList.add('visited');
@@ -400,6 +515,15 @@ class Game {
                 mapDiv.appendChild(tile);
             }
         }
+
+        // Update floor info with enemy count
+        const remainingEnemies = this.dungeon.monsters.length;
+        document.getElementById('dungeon-info').innerHTML = `
+            <h2>🏰 Dungeon - Floor <span id="current-floor">${this.dungeon.floor}</span></h2>
+            <p style="margin: 5px 0; font-size: 14px;">
+                ${remainingEnemies > 0 ? `⚔️ Enemies remaining: ${remainingEnemies}` : '✅ Floor cleared!'}
+            </p>
+        `;
     }
 
     movePlayer(targetX, targetY) {
@@ -436,10 +560,15 @@ class Game {
 
         // Check for stairs
         if (this.dungeon.stairs && targetX === this.dungeon.stairs.x && targetY === this.dungeon.stairs.y) {
-            this.nextFloor();
+            if (this.dungeon.allEnemiesDefeated) {
+                this.nextFloor();
+            } else {
+                this.addMessage("🔒 The stairs are locked! Defeat all enemies on this floor first.");
+            }
         }
 
         this.renderDungeon();
+        this.saveGame();
     }
 
     getMonsterAt(x, y) {
@@ -521,6 +650,7 @@ class Game {
             }
             
             this.renderDungeon();
+            this.saveGame();
         } else {
             this.addMessage("❌ Failed to flee!");
             this.attack(); // Enemy gets free attack
@@ -530,6 +660,7 @@ class Game {
     winBattle() {
         const expGained = this.currentEnemy.expValue;
         const goldGained = Math.floor(this.currentEnemy.expValue * (1 + this.dungeon.floor / 10));
+        const wasBoss = this.currentEnemy.isBoss;
         
         this.player.exp += expGained;
         this.player.gold += goldGained;
@@ -540,13 +671,22 @@ class Game {
         const index = this.dungeon.monsters.indexOf(this.currentEnemy);
         this.dungeon.monsters.splice(index, 1);
         
+        // Check if all enemies defeated
+        this.checkAllEnemiesDefeated();
+        
+        // If it was a boss, add this floor to defeated bosses
+        if (wasBoss && !this.player.defeatedBosses.includes(this.dungeon.floor)) {
+            this.player.defeatedBosses.push(this.dungeon.floor);
+            this.addMessage(`🏆 Boss defeated! You can now start from floor ${this.dungeon.floor} when entering the dungeon!`);
+        }
+        
         // Check level up
         while (this.player.exp >= this.player.expNeeded) {
             this.levelUp();
         }
         
         // Chance for item drop
-        if (Math.random() < 0.3 + (this.currentEnemy.isBoss ? 0.4 : 0)) {
+        if (Math.random() < 0.3 + (wasBoss ? 0.4 : 0)) {
             const item = this.generateItem();
             this.showLoot(item);
         } else {
@@ -556,6 +696,7 @@ class Game {
         
         this.updateStats();
         this.renderDungeon();
+        this.saveGame();
     }
 
     levelUp() {
@@ -612,6 +753,7 @@ class Game {
         this.inBattle = false;
         document.getElementById('loot-modal').classList.remove('active');
         this.renderDungeon();
+        this.saveGame();
     }
 
     leaveLoot() {
@@ -626,6 +768,7 @@ class Game {
             this.player.potions--;
             this.addMessage(`🧪 Used potion! Healed ${healing} HP!`);
             this.updateStats();
+            this.saveGame();
         } else if (this.player.potions === 0) {
             this.addMessage("❌ No potions left!");
         } else {
@@ -733,6 +876,7 @@ class Game {
         this.recalculateStats();
         this.renderInventory();
         this.addMessage(`✅ Equipped ${item.name}!`);
+        this.saveGame();
     }
 
     unequip(slot) {
@@ -743,6 +887,7 @@ class Game {
             this.recalculateStats();
             this.renderInventory();
             this.addMessage(`📦 Unequipped ${item.name}`);
+            this.saveGame();
         }
     }
 
@@ -784,6 +929,7 @@ class Game {
         
         clearInterval(this.monsterMoveInterval);
         this.showTown();
+        this.saveGame();
     }
 
     showTown() {
@@ -793,17 +939,90 @@ class Game {
         this.addMessage("🏘️ Returned to town");
     }
 
-    enterDungeon() {
+    showFloorSelection() {
+        // Create floor selection modal content
+        let floorOptions = '<option value="1">Floor 1 - Starting Floor</option>';
+        
+        // Add defeated boss floors
+        this.player.defeatedBosses.sort((a, b) => a - b).forEach(floor => {
+            const bossIndex = Math.floor((floor / 10) - 1);
+            const bossName = this.bossTypes[Math.min(bossIndex, this.bossTypes.length - 1)].name;
+            floorOptions += `<option value="${floor}">Floor ${floor} - ${bossName} Defeated</option>`;
+        });
+
+        const floorSelectionHtml = `
+            <div style="text-align: center; padding: 20px;">
+                <h3>🏰 Select Starting Floor</h3>
+                <select id="floor-select" style="
+                    padding: 10px;
+                    font-size: 16px;
+                    margin: 20px 0;
+                    background: #0f3460;
+                    color: white;
+                    border: 2px solid #e94560;
+                    border-radius: 5px;
+                    width: 80%;
+                ">
+                    ${floorOptions}
+                </select>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button onclick="game.enterDungeonAtFloor()">Enter Dungeon</button>
+                    <button onclick="game.cancelFloorSelection()">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        // Create and show the modal
+        const modal = document.createElement('div');
+        modal.id = 'floor-selection-modal';
+        modal.className = 'modal active';
+        modal.innerHTML = `<div class="modal-content">${floorSelectionHtml}</div>`;
+        document.body.appendChild(modal);
+    }
+
+    enterDungeonAtFloor() {
+        const selectedFloor = parseInt(document.getElementById('floor-select').value);
+        this.dungeon.floor = selectedFloor;
+        
+        // Remove the modal
+        const modal = document.getElementById('floor-selection-modal');
+        if (modal) modal.remove();
+        
+        // Enter the dungeon
         this.currentView = 'dungeon';
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         document.getElementById('dungeon-view').classList.add('active');
         
-        if (!this.dungeon.map.length) {
-            this.generateDungeon();
-        }
-        
+        this.generateDungeon();
         this.renderDungeon();
-        this.addMessage(`🏰 Entered dungeon floor ${this.dungeon.floor}`);
+        this.addMessage(`🏰 Entered dungeon at floor ${this.dungeon.floor}`);
+        this.saveGame();
+    }
+
+    cancelFloorSelection() {
+        const modal = document.getElementById('floor-selection-modal');
+        if (modal) modal.remove();
+    }
+
+    enterDungeon() {
+        // If player has defeated bosses, show floor selection
+        if (this.player.defeatedBosses && this.player.defeatedBosses.length > 0) {
+            this.showFloorSelection();
+        } else {
+            // Otherwise, start at floor 1 as normal
+            this.currentView = 'dungeon';
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('dungeon-view').classList.add('active');
+            
+            if (!this.dungeon.map.length) {
+                this.dungeon.floor = 1;
+                this.generateDungeon();
+            }
+            
+            this.renderDungeon();
+            this.addMessage(`🏰 Entered dungeon floor ${this.dungeon.floor}`);
+            this.saveGame();
+        }
     }
 
     enterShop() {
@@ -867,6 +1086,7 @@ class Game {
             this.addMessage(`✅ Bought ${item.name} for ${price} gold!`);
             this.updateStats();
             this.renderShop();
+            this.saveGame();
         } else if (this.player.gold < price) {
             this.addMessage("❌ Not enough gold!");
         } else {
@@ -881,6 +1101,7 @@ class Game {
         this.addMessage(`💰 Sold ${item.name} for ${item.value} gold!`);
         this.updateStats();
         this.renderShop();
+        this.saveGame();
     }
 
     enterInn() {
@@ -895,6 +1116,7 @@ class Game {
             this.player.hp = this.player.maxHp;
             this.addMessage("💤 You feel refreshed! HP fully restored!");
             this.updateStats();
+            this.saveGame();
         } else {
             this.addMessage("❌ Not enough gold!");
         }
@@ -906,6 +1128,7 @@ class Game {
             this.player.potions++;
             this.addMessage("🧪 Bought a potion!");
             this.updateStats();
+            this.saveGame();
         } else {
             this.addMessage("❌ Not enough gold!");
         }
@@ -944,6 +1167,14 @@ class Game {
             storeButton.onclick = () => this.storeItems();
             storageDiv.appendChild(storeButton);
         }
+
+        // Add delete save button
+        const deleteSaveButton = document.createElement('button');
+        deleteSaveButton.textContent = '🗑️ Delete Save Game';
+        deleteSaveButton.style.background = '#dc3545';
+        deleteSaveButton.style.marginTop = '20px';
+        deleteSaveButton.onclick = () => this.deleteSave();
+        storageDiv.appendChild(deleteSaveButton);
     }
 
     storeItems() {
@@ -953,6 +1184,7 @@ class Game {
             this.player.storage.push(item);
             this.addMessage(`📦 Stored ${item.name} in quarters`);
             this.renderStorage();
+            this.saveGame();
         }
     }
 
@@ -963,6 +1195,7 @@ class Game {
             this.player.storage.splice(index, 1);
             this.addMessage(`📦 Retrieved ${item.name} from storage`);
             this.renderStorage();
+            this.saveGame();
         } else {
             this.addMessage("❌ Inventory full!");
         }
@@ -987,6 +1220,7 @@ class Game {
         this.dungeon.monsters = [];
         this.dungeon.items = [];
         this.dungeon.discovered = [];
+        this.dungeon.allEnemiesDefeated = false;
         this.inBattle = false;
         this.currentEnemy = null;
         
@@ -1001,6 +1235,7 @@ class Game {
         this.addMessage("💡 Visit the inn to heal before returning to the dungeon!");
         
         this.updateStats();
+        this.saveGame();
     }
 
     updateStats() {
@@ -1013,6 +1248,9 @@ class Game {
         document.getElementById('player-exp').textContent = this.player.exp;
         document.getElementById('exp-needed').textContent = this.player.expNeeded;
         document.getElementById('potion-count').textContent = this.player.potions;
+        if (document.getElementById('current-floor')) {
+            document.getElementById('current-floor').textContent = this.dungeon.floor;
+        }
     }
 
     addMessage(text) {
