@@ -411,6 +411,9 @@ class Game {
         // Only allow movement to adjacent tiles
         if (Math.abs(dx) + Math.abs(dy) !== 1) return;
         
+        // Check if target is within bounds
+        if (targetX < 0 || targetX >= 15 || targetY < 0 || targetY >= 15) return;
+        
         // Check if target is walkable
         if (this.dungeon.map[targetY][targetX] === '#') return;
 
