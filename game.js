@@ -241,32 +241,24 @@ class Game {
         this.dungeon.discovered = [];
         this.dungeon.allEnemiesDefeated = false;
 
-        // Initialize map
+        // Initialize map with all walls
         for (let y = 0; y < size; y++) {
             this.dungeon.map[y] = [];
             this.dungeon.discovered[y] = [];
             for (let x = 0; x < size; x++) {
-                this.dungeon.map[y][x] = Math.random() < 0.3 ? '#' : '.';
+                this.dungeon.map[y][x] = '#';
                 this.dungeon.discovered[y][x] = false;
             }
         }
 
-        // Ensure player starting position is clear
-        this.dungeon.map[7][7] = '.';
+        // Generate rooms and corridors
+        this.generateRoomsAndCorridors();
         
-        // Create paths
-        this.createPaths();
+        // Ensure all floor tiles are connected
+        this.ensureConnectivity();
 
-        // Place stairs
-        let stairsPlaced = false;
-        while (!stairsPlaced) {
-            const x = Math.floor(Math.random() * size);
-            const y = Math.floor(Math.random() * size);
-            if (this.dungeon.map[y][x] === '.' && (x !== 7 || y !== 7)) {
-                this.dungeon.stairs = { x, y };
-                stairsPlaced = true;
-            }
-        }
+        // Place stairs in a reachable location
+        this.placeStairs();
 
         // Check if boss floor
         if (this.dungeon.floor % 10 === 0) {
@@ -296,44 +288,208 @@ class Game {
         this.saveGame();
     }
 
-    createPaths() {
+    generateRoomsAndCorridors() {
         const size = 15;
-        const paths = [
-            { start: { x: 7, y: 7 }, end: { x: Math.floor(Math.random() * size), y: 0 } },
-            { start: { x: 7, y: 7 }, end: { x: Math.floor(Math.random() * size), y: size - 1 } },
-            { start: { x: 7, y: 7 }, end: { x: 0, y: Math.floor(Math.random() * size) } },
-            { start: { x: 7, y: 7 }, end: { x: size - 1, y: Math.floor(Math.random() * size) } }
-        ];
+        const rooms = [];
+        const numRooms = 5 + Math.floor(Math.random() * 3);
 
-        paths.forEach(path => {
-            let current = { ...path.start };
-            while (current.x !== path.end.x || current.y !== path.end.y) {
-                this.dungeon.map[current.y][current.x] = '.';
-                
-                if (Math.random() < 0.5) {
-                    if (current.x < path.end.x) current.x++;
-                    else if (current.x > path.end.x) current.x--;
-                } else {
-                    if (current.y < path.end.y) current.y++;
-                    else if (current.y > path.end.y) current.y--;
+        // Generate rooms
+        for (let i = 0; i < numRooms; i++) {
+            const roomWidth = 3 + Math.floor(Math.random() * 4);
+            const roomHeight = 3 + Math.floor(Math.random() * 4);
+            const x = 1 + Math.floor(Math.random() * (size - roomWidth - 2));
+            const y = 1 + Math.floor(Math.random() * (size - roomHeight - 2));
+
+            const room = { x, y, width: roomWidth, height: roomHeight };
+            
+            // Check if room overlaps with existing rooms
+            let overlaps = false;
+            for (const existingRoom of rooms) {
+                if (this.roomsOverlap(room, existingRoom)) {
+                    overlaps = true;
+                    break;
                 }
             }
-            this.dungeon.map[path.end.y][path.end.x] = '.';
-        });
+
+            if (!overlaps) {
+                rooms.push(room);
+                // Carve out the room
+                for (let rx = x; rx < x + roomWidth; rx++) {
+                    for (let ry = y; ry < y + roomHeight; ry++) {
+                        this.dungeon.map[ry][rx] = '.';
+                    }
+                }
+            }
+        }
+
+        // Ensure player starting position is in a room
+        this.dungeon.map[7][7] = '.';
+        
+        // Connect rooms with corridors
+        for (let i = 0; i < rooms.length - 1; i++) {
+            const roomA = rooms[i];
+            const roomB = rooms[i + 1];
+            
+            const startX = Math.floor(roomA.x + roomA.width / 2);
+            const startY = Math.floor(roomA.y + roomA.height / 2);
+            const endX = Math.floor(roomB.x + roomB.width / 2);
+            const endY = Math.floor(roomB.y + roomB.height / 2);
+            
+            this.createCorridor(startX, startY, endX, endY);
+        }
+
+        // Connect first and last room to ensure no isolated areas
+        if (rooms.length > 2) {
+            const firstRoom = rooms[0];
+            const lastRoom = rooms[rooms.length - 1];
+            const startX = Math.floor(firstRoom.x + firstRoom.width / 2);
+            const startY = Math.floor(firstRoom.y + firstRoom.height / 2);
+            const endX = Math.floor(lastRoom.x + lastRoom.width / 2);
+            const endY = Math.floor(lastRoom.y + lastRoom.height / 2);
+            this.createCorridor(startX, startY, endX, endY);
+        }
+
+        // Connect player position to nearest room
+        if (rooms.length > 0) {
+            const nearestRoom = rooms[0];
+            const roomCenterX = Math.floor(nearestRoom.x + nearestRoom.width / 2);
+            const roomCenterY = Math.floor(nearestRoom.y + nearestRoom.height / 2);
+            this.createCorridor(7, 7, roomCenterX, roomCenterY);
+        }
+    }
+
+    roomsOverlap(roomA, roomB) {
+        const padding = 1; // Add padding to prevent rooms from touching
+        return !(roomA.x + roomA.width + padding <= roomB.x ||
+                 roomB.x + roomB.width + padding <= roomA.x ||
+                 roomA.y + roomA.height + padding <= roomB.y ||
+                 roomB.y + roomB.height + padding <= roomA.y);
+    }
+
+    createCorridor(startX, startY, endX, endY) {
+        let x = startX;
+        let y = startY;
+
+        // Create L-shaped corridor
+        if (Math.random() < 0.5) {
+            // Horizontal first, then vertical
+            while (x !== endX) {
+                this.dungeon.map[y][x] = '.';
+                x += x < endX ? 1 : -1;
+            }
+            while (y !== endY) {
+                this.dungeon.map[y][x] = '.';
+                y += y < endY ? 1 : -1;
+            }
+        } else {
+            // Vertical first, then horizontal
+            while (y !== endY) {
+                this.dungeon.map[y][x] = '.';
+                y += y < endY ? 1 : -1;
+            }
+            while (x !== endX) {
+                this.dungeon.map[y][x] = '.';
+                x += x < endX ? 1 : -1;
+            }
+        }
+        this.dungeon.map[endY][endX] = '.';
+    }
+
+    ensureConnectivity() {
+        // Flood fill from player position to find all reachable tiles
+        const size = 15;
+        const visited = [];
+        for (let y = 0; y < size; y++) {
+            visited[y] = new Array(size).fill(false);
+        }
+
+        const reachableTiles = [];
+        const queue = [{ x: 7, y: 7 }];
+        visited[7][7] = true;
+
+        while (queue.length > 0) {
+            const { x, y } = queue.shift();
+            reachableTiles.push({ x, y });
+
+            const directions = [
+                { dx: 0, dy: -1 },
+                { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 },
+                { dx: -1, dy: 0 }
+            ];
+
+            for (const { dx, dy } of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+
+                if (nx >= 0 && nx < size && ny >= 0 && ny < size &&
+                    !visited[ny][nx] && this.dungeon.map[ny][nx] === '.') {
+                    visited[ny][nx] = true;
+                    queue.push({ x: nx, y: ny });
+                }
+            }
+        }
+
+        // Store reachable tiles for later use
+        this.reachableTiles = reachableTiles;
+    }
+
+    getRandomReachableTile() {
+        if (!this.reachableTiles || this.reachableTiles.length === 0) {
+            // Fallback to any floor tile
+            const floorTiles = [];
+            for (let y = 0; y < 15; y++) {
+                for (let x = 0; x < 15; x++) {
+                    if (this.dungeon.map[y][x] === '.') {
+                        floorTiles.push({ x, y });
+                    }
+                }
+            }
+            if (floorTiles.length > 0) {
+                return floorTiles[Math.floor(Math.random() * floorTiles.length)];
+            }
+            return { x: 7, y: 7 }; // Last resort
+        }
+        
+        return this.reachableTiles[Math.floor(Math.random() * this.reachableTiles.length)];
+    }
+
+    placeStairs() {
+        let placed = false;
+        let attempts = 0;
+        
+        while (!placed && attempts < 100) {
+            const tile = this.getRandomReachableTile();
+            if (tile.x !== this.player.x || tile.y !== this.player.y) {
+                this.dungeon.stairs = { x: tile.x, y: tile.y };
+                placed = true;
+            }
+            attempts++;
+        }
+
+        // Fallback - place stairs at first available reachable tile
+        if (!placed) {
+            for (const tile of this.reachableTiles) {
+                if (tile.x !== this.player.x || tile.y !== this.player.y) {
+                    this.dungeon.stairs = { x: tile.x, y: tile.y };
+                    break;
+                }
+            }
+        }
     }
 
     placeMonster() {
-        const size = 15;
         let placed = false;
-        while (!placed) {
-            const x = Math.floor(Math.random() * size);
-            const y = Math.floor(Math.random() * size);
-            if (this.dungeon.map[y][x] === '.' && (x !== this.player.x || y !== this.player.y) && !this.getMonsterAt(x, y)) {
+        let attempts = 0;
+        
+        while (!placed && attempts < 100) {
+            const tile = this.getRandomReachableTile();
+            if ((tile.x !== this.player.x || tile.y !== this.player.y) && !this.getMonsterAt(tile.x, tile.y)) {
                 const monsterType = this.getMonsterForFloor();
                 const monster = {
                     ...monsterType,
-                    x,
-                    y,
+                    x: tile.x,
+                    y: tile.y,
                     hp: Math.floor(monsterType.baseHp * (1 + this.dungeon.floor / 20)),
                     maxHp: Math.floor(monsterType.baseHp * (1 + this.dungeon.floor / 20)),
                     attack: Math.floor(monsterType.baseAttack * (1 + this.dungeon.floor / 15)),
@@ -342,16 +498,31 @@ class Game {
                 this.dungeon.monsters.push(monster);
                 placed = true;
             }
+            attempts++;
         }
     }
 
     placeBoss() {
         const bossIndex = Math.floor((this.dungeon.floor / 10) - 1);
         const bossType = this.bossTypes[Math.min(bossIndex, this.bossTypes.length - 1)];
+        
+        // Find a suitable location for the boss (not too close to player start)
+        let bossX = 7, bossY = 7;
+        let bestDistance = 0;
+        
+        for (const tile of this.reachableTiles) {
+            const distance = Math.abs(tile.x - 7) + Math.abs(tile.y - 7);
+            if (distance > bestDistance && distance > 5) {
+                bestDistance = distance;
+                bossX = tile.x;
+                bossY = tile.y;
+            }
+        }
+        
         const boss = {
             ...bossType,
-            x: 7,
-            y: 3,
+            x: bossX,
+            y: bossY,
             hp: Math.floor(bossType.baseHp * (1 + this.dungeon.floor / 50)),
             maxHp: Math.floor(bossType.baseHp * (1 + this.dungeon.floor / 50)),
             attack: Math.floor(bossType.baseAttack * (1 + this.dungeon.floor / 30)),
@@ -359,7 +530,6 @@ class Game {
             isBoss: true
         };
         this.dungeon.monsters.push(boss);
-        this.dungeon.map[3][7] = '.'; // Ensure boss position is clear
     }
 
     getMonsterForFloor() {
@@ -369,16 +539,17 @@ class Game {
     }
 
     placeItem() {
-        const size = 15;
         let placed = false;
-        while (!placed) {
-            const x = Math.floor(Math.random() * size);
-            const y = Math.floor(Math.random() * size);
-            if (this.dungeon.map[y][x] === '.' && !this.getItemAt(x, y)) {
+        let attempts = 0;
+        
+        while (!placed && attempts < 100) {
+            const tile = this.getRandomReachableTile();
+            if (!this.getItemAt(tile.x, tile.y)) {
                 const item = this.generateItem();
-                this.dungeon.items.push({ ...item, x, y });
+                this.dungeon.items.push({ ...item, x: tile.x, y: tile.y });
                 placed = true;
             }
+            attempts++;
         }
     }
 
@@ -518,12 +689,7 @@ class Game {
 
         // Update floor info with enemy count
         const remainingEnemies = this.dungeon.monsters.length;
-        document.getElementById('dungeon-info').innerHTML = `
-            <h2>🏰 Dungeon - Floor <span id="current-floor">${this.dungeon.floor}</span></h2>
-            <p style="margin: 5px 0; font-size: 14px;">
-                ${remainingEnemies > 0 ? `⚔️ Enemies remaining: ${remainingEnemies}` : '✅ Floor cleared!'}
-            </p>
-        `;
+        document.getElementById('enemy-count').textContent = remainingEnemies;
     }
 
     movePlayer(targetX, targetY) {
@@ -1250,6 +1416,9 @@ class Game {
         document.getElementById('potion-count').textContent = this.player.potions;
         if (document.getElementById('current-floor')) {
             document.getElementById('current-floor').textContent = this.dungeon.floor;
+        }
+        if (document.getElementById('enemy-count')) {
+            document.getElementById('enemy-count').textContent = this.dungeon.monsters.length;
         }
     }
 
