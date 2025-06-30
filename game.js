@@ -102,8 +102,14 @@ class Game {
     }
 
     init() {
+        // Check if we're in the dungeon view but not actually in the dungeon
+        if (this.currentView === 'dungeon' && this.dungeon.map.length === 0) {
+            // Reset to town if dungeon data is missing
+            this.currentView = 'town';
+        }
+        
         if (this.currentView === 'dungeon' && this.dungeon.map.length > 0) {
-            // If we loaded in the dungeon, render it
+            // If we loaded in the dungeon with valid data, render it
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById('dungeon-view').classList.add('active');
             this.renderDungeon();
@@ -1093,9 +1099,23 @@ class Game {
             return;
         }
         
+        // Clear dungeon state when leaving
+        this.clearDungeonState();
+        
         clearInterval(this.monsterMoveInterval);
         this.showTown();
         this.saveGame();
+    }
+
+    clearDungeonState() {
+        // Reset floor to 1 when leaving dungeon
+        this.dungeon.floor = 1;
+        this.dungeon.map = [];
+        this.dungeon.monsters = [];
+        this.dungeon.items = [];
+        this.dungeon.stairs = null;
+        this.dungeon.discovered = [];
+        this.dungeon.allEnemiesDefeated = false;
     }
 
     showTown() {
@@ -1171,6 +1191,9 @@ class Game {
     }
 
     enterDungeon() {
+        // Clear any existing dungeon state
+        this.clearDungeonState();
+        
         // If player has defeated bosses, show floor selection
         if (this.player.defeatedBosses && this.player.defeatedBosses.length > 0) {
             this.showFloorSelection();
@@ -1180,11 +1203,8 @@ class Game {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById('dungeon-view').classList.add('active');
             
-            if (!this.dungeon.map.length) {
-                this.dungeon.floor = 1;
-                this.generateDungeon();
-            }
-            
+            this.dungeon.floor = 1;
+            this.generateDungeon();
             this.renderDungeon();
             this.addMessage(`🏰 Entered dungeon floor ${this.dungeon.floor}`);
             this.saveGame();
@@ -1381,12 +1401,9 @@ class Game {
         this.player.gold -= goldLost;
         this.addMessage(`💸 Lost ${goldLost} gold...`);
         
-        // Clear dungeon state
-        this.dungeon.map = [];
-        this.dungeon.monsters = [];
-        this.dungeon.items = [];
-        this.dungeon.discovered = [];
-        this.dungeon.allEnemiesDefeated = false;
+        // Clear dungeon state when dying
+        this.clearDungeonState();
+        
         this.inBattle = false;
         this.currentEnemy = null;
         
@@ -1422,7 +1439,7 @@ class Game {
         }
     }
 
-    addMessage(text) {
+        addMessage(text) {
         const messagesDiv = document.getElementById('messages');
         const message = document.createElement('div');
         message.className = 'message';
